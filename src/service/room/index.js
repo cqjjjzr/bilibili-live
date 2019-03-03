@@ -13,7 +13,7 @@ export default class RoomService extends EventEmitter {
     this.roomId = config.roomId || this.roomURL
     this.config = config
 
-    this._api = new Api()
+    this._api = new Api({baseUrlLive: config.baseUrlLive, baseUrlBilibili: config.baseUrlBilibili})
     this._danmakuService = null
     this._fansService = null
     this._infoService = null
@@ -31,7 +31,8 @@ export default class RoomService extends EventEmitter {
         roomId: this.roomId,
         useWebsocket: !!this.config.useWebsocket || true,
         useWSS: !!this.config.useHttps,
-        useGiftBundle: !!this.config.useGiftBundle
+        useGiftBundle: !!this.config.useGiftBundle,
+        api: this._api
       })
 
       this.handleDanmakuEvents()

@@ -4,12 +4,14 @@ const TEST_ROOM_URL = 92052
 
 async function test () {
   let api = new API({
-    cookie: ''
+    cookie: '',
+    baseUrlLive: '127.0.0.1:8010/proxy/'
   })
-  let baseInfo = await api.getRoomBaseInfo(TEST_ROOM_URL)
-  console.log(baseInfo)
+  //let baseInfo = await api.getRoomBaseInfo(TEST_ROOM_URL)
+  let x = await api.getTitleInfos()
+  console.log(x)
 
-  api.setRoomId(baseInfo.id)
+  /*api.setRoomId(baseInfo.id)
 
   console.log('直播间信息')
   let roomInfo = await api.getRoomInfo()
@@ -20,7 +22,7 @@ async function test () {
   // console.log(roomMessage)
   console.log('粉丝列表')
   let roomFans = await api.getAnchorFollwerList(anchorId)
-  console.log(roomFans)
+  console.log(roomFans)*/
 
   // let areaList = await api.getAreaList()
   // areaList.forEach(area => {

@@ -92,7 +92,7 @@ export function getRoomMessage () {
 // 获取直播间粉丝列表
 export function getAnchorFollwerList (anchorId, page = 1, pageSize = 20, order = 'desc') {
   return this.get({
-    url: 'api.bilibili.com/x/relation/followers',
+    url: this.baseUrlBilibili + 'x/relation/followers',
     params: {
       vmid: anchorId,
       pn: page,
@@ -155,6 +155,20 @@ export function getRoomBlockList (page = 1) {
         },
         ctime: item.ctime,
         etime: item.block_end_time
+      }
+    })
+  })
+}
+
+export function getTitleInfos() {
+  return this.get({
+    uri: 'rc/v1/Title/webTitles'
+  }).then(res => {
+    let data = JSON.parse(res).data;
+    return data.map(info => {
+      return {
+        id: info.identification,
+        url: info.web_pic_url
       }
     })
   })

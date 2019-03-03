@@ -1,8 +1,8 @@
 import EventEmitter from 'events';
-import WebSocket from 'ws';
 import net from 'net';
 import _ from 'lodash';
 import { StringDecoder } from 'string_decoder';
+import toBuffer from 'blob-to-buffer';
 import qs from 'querystring';
 import http from 'http';
 import https from 'https';
@@ -75,36 +75,38 @@ var Consts = {
 
 const textDecoder = new StringDecoder('utf8');
 
-function decodeBuffer (buff) {
-  let data = {};
-  data.packetLen = buff.readInt32BE(Consts.WS_PACKAGE_OFFSET);
-  Consts.dataStruct.forEach((struct) => {
-    if (struct.bytes === 4) {
-      data[struct.key] = buff.readInt32BE(struct.offset);
-    } else if (struct.bytes === 2) {
-      data[struct.key] = buff.readInt16BE(struct.offset);
-    }
-  });
-  if (data.op && data.op === Consts.WS_OP_MESSAGE) {
-    data.body = [];
-    let packetLen = data.packetLen;
-    let headerLen = 0;
-    for (let offset = Consts.WS_PACKAGE_OFFSET; offset < buff.byteLength; offset += packetLen) {
-      packetLen = buff.readInt32BE(offset);
-      headerLen = buff.readInt16BE(offset + Consts.WS_HEADER_OFFSET);
-      try {
-        let body = JSON.parse(textDecoder.write(buff.slice(offset + headerLen, offset + packetLen)));
-        data.body.push(body);
-      } catch (e) {
-        console.log('decode body error:', textDecoder.write(buff.slice(offset + headerLen, offset + packetLen)), data);
+function decodeBuffer (blob, cb) {
+  toBuffer(blob, function (err, buff) {
+    var data = {};
+    data.packetLen = buff.readInt32BE(Consts.WS_PACKAGE_OFFSET);
+    Consts.dataStruct.forEach((struct) => {
+      if (struct.bytes === 4) {
+        data[struct.key] = buff.readInt32BE(struct.offset);
+      } else if (struct.bytes === 2) {
+        data[struct.key] = buff.readInt16BE(struct.offset);
       }
+    });
+    if (data.op && data.op === Consts.WS_OP_MESSAGE) {
+      data.body = [];
+      let packetLen = data.packetLen;
+      let headerLen = 0;
+      for (let offset = Consts.WS_PACKAGE_OFFSET; offset < buff.byteLength; offset += packetLen) {
+        packetLen = buff.readInt32BE(offset);
+        headerLen = buff.readInt16BE(offset + Consts.WS_HEADER_OFFSET);
+        try {
+          let body = JSON.parse(textDecoder.write(buff.slice(offset + headerLen, offset + packetLen)));
+          data.body.push(body);
+        } catch (e) {
+          console.log('decode body error:', textDecoder.write(buff.slice(offset + headerLen, offset + packetLen)), data);
+        }
+      }
+    } else if (data.op && data.op === Consts.WS_OP_HEARTBEAT_REPLY) {
+      data.body = {
+        number: buff.readInt32BE(Consts.WS_PACKAGE_HEADER_TOTAL_LENGTH)
+      };
     }
-  } else if (data.op && data.op === Consts.WS_OP_HEARTBEAT_REPLY) {
-    data.body = {
-      number: buff.readInt32BE(Consts.WS_PACKAGE_HEADER_TOTAL_LENGTH)
-    };
-  }
-  return data
+    cb(data);
+  });
 }
 
 function parseMessage (msg) {
@@ -125,7 +127,7 @@ function parseMessage (msg) {
   }
 }
 
-function transformMessage (msg) {
+function transformMessage (msg, config) {
   let message = {};
   switch (msg.cmd) {
     case 'LIVE':
@@ -159,9 +161,16 @@ function transformMessage (msg) {
         message.user.level = msg.info[4][0];
       }
       if (msg.info[5].length) {
+        var info = config.find((i) => {
+          return i.id === msg.info[5][0]
+        });
+        var url$$1 = null;
+        if (info)
+          url$$1 = info.url;
         message.user.title = {
           name: msg.info[5][0],
-          source: msg.info[5][1]
+          source: msg.info[5][1],
+          url: url$$1
         };
       }
       break
@@ -221,17 +230,24 @@ function transformMessage (msg) {
   return message
 }
 
-function decodeData (buff) {
+function decodeData (buff, config, cb) {
   let messages = [];
   try {
-    let data = parseMessage(decodeBuffer(buff));
-    if (data instanceof Array) {
-      data.forEach((m) => {
-        messages.push(m);
-      });
-    } else if (data instanceof Object) {
-      messages.push(data);
-    }
+    decodeBuffer(buff, (decoded) => {
+      try {
+        let data = parseMessage(decoded, config);
+        if (data instanceof Array) {
+          data.forEach((m) => {
+            messages.push(m);
+          });
+        } else if (data instanceof Object) {
+          messages.push(data);
+        }
+        cb(messages);
+      } catch (e) {
+        console.log('Socket message error', buff, e);
+      }
+    });
   } catch (e) {
     console.log('Socket message error', buff, e);
   }
@@ -317,6 +333,9 @@ class DanmakuService extends EventEmitter {
     this.useWSS = config.useWSS || false;
     this.useGiftBundle = config.useGiftBundle || false;
     this.giftBundleDelay = config.giftBundleDelay || 3e3;
+    this.api = config.api;
+
+    this.titleInfos = this.api.getTitleInfos();
 
     this._socket = null;
     this._socketEvents = {
@@ -384,40 +403,43 @@ class DanmakuService extends EventEmitter {
       events = this._websocketEvents;
     }
 
-    socket.on(events.connect, () => {
+    socket.onopen = () => {
       if (socket !== this._socket) return
       this.sendJoinRoom();
       this.emit('connect');
-    });
+    };
 
-    socket.on(events.data, (msg) => {
+    socket.onmessage = (evt) => {
+      var msg = evt.data;
       if (socket !== this._socket) return
       this._checkErrorService();
-      DMDecoder.decodeData(msg).map(m => {
-        if (m.type === 'connected') {
-          this.sendHeartbeat();
-          this.emit(m.type, m);
-        } else {
-          if (m.type === 'gift' && this.useGiftBundle) {
-            this.bundleGift(m);
-          } else {
-            this.emit('data', m);
+      DMDecoder.decodeData(msg, (msgs) => {
+        msgs.map(m => {
+          if (m.type === 'connected') {
+            this.sendHeartbeat();
             this.emit(m.type, m);
+          } else {
+            if (m.type === 'gift' && this.useGiftBundle) {
+              this.bundleGift(m);
+            } else {
+              this.emit('data', m);
+              this.emit(m.type, m);
+            }
           }
-        }
+        });
       });
-    });
+    };
 
-    socket.on(events.close, () => {
+    socket.onclose = () => {
       if (socket !== this._socket) return
       this.emit('close');
-    });
+    };
 
-    socket.on(events.error, (err) => {
+    socket.onerror = (err) => {
       if (socket !== this._socket) return
-      this.emit('error', err);
+      this.emit('error', err.data);
       this.reconnect();
-    });
+    };
   }
 
   sendJoinRoom() {
@@ -630,7 +652,7 @@ function getRoomMessage () {
 // 获取直播间粉丝列表
 function getAnchorFollwerList (anchorId, page = 1, pageSize = 20, order = 'desc') {
   return this.get({
-    url: 'api.bilibili.com/x/relation/followers',
+    url: this.baseUrlBilibili + 'x/relation/followers',
     params: {
       vmid: anchorId,
       pn: page,
@@ -698,6 +720,19 @@ function getRoomBlockList (page = 1) {
   })
 }
 
+function getTitleInfos() {
+  return this.get({
+    uri: 'rc/v1/Title/webTitles'
+  }).then(res => {
+    let data = JSON.parse(res).data;
+    return data.map(info => {
+      return {
+        id: info.identification,
+        url: info.web_pic_url
+      }
+    })
+  })
+}
 
 var basic = Object.freeze({
 	getRoomBaseInfo: getRoomBaseInfo,
@@ -708,7 +743,8 @@ var basic = Object.freeze({
 	getRoomMessage: getRoomMessage,
 	getAnchorFollwerList: getAnchorFollwerList,
 	getRoomAdminList: getRoomAdminList,
-	getRoomBlockList: getRoomBlockList
+	getRoomBlockList: getRoomBlockList,
+	getTitleInfos: getTitleInfos
 });
 
 let apis = Object.assign({}, basic);
@@ -1052,10 +1088,12 @@ var activity = Object.freeze({
 
 let apis$1 = Object.assign({}, basic$1, audience, anchor, activity);
 
-const BASE_URL = 'api.live.bilibili.com/';
+//const BASE_URL = 'api.live.bilibili.com/'
 
 class Api {
   constructor(config = {}) {
+    this.baseUrlLive = config.baseUrlLive;
+    this.baseUrlBilibili = config.baseUrlBilibili;
     this.protocol = config.useHttps ? 'https://' : 'http://';
     this.cookie = config.cookie || '';
     this.roomId = config.roomId || '23058';
@@ -1074,7 +1112,7 @@ class Api {
   }
 
   get(options) {
-    let url$$1 = this.protocol + (options.url ? options.url : BASE_URL + options.uri);
+    let url$$1 = this.protocol + (options.url ? options.url : this.baseUrlLive + options.uri);
     let headers = {
       'Cookie': this.cookie
     };
@@ -1085,7 +1123,7 @@ class Api {
   }
 
   post(options) {
-    let url$$1 = this.protocol + (options.url ? options.url : BASE_URL + options.uri);
+    let url$$1 = this.protocol + (options.url ? options.url : this.baseUrlLive + options.uri);
     let headers = {
       'Cookie': this.cookie
     };
@@ -1215,7 +1253,7 @@ class RoomService extends EventEmitter {
     this.roomId = config.roomId || this.roomURL;
     this.config = config;
 
-    this._api = new Api();
+    this._api = new Api({baseUrlLive: config.baseUrlLive, baseUrlBilibili: config.baseUrlBilibili});
     this._danmakuService = null;
     this._fansService = null;
     this._infoService = null;
@@ -1233,7 +1271,8 @@ class RoomService extends EventEmitter {
         roomId: this.roomId,
         useWebsocket: !!this.config.useWebsocket || true,
         useWSS: !!this.config.useHttps,
-        useGiftBundle: !!this.config.useGiftBundle
+        useGiftBundle: !!this.config.useGiftBundle,
+        api: this._api
       });
 
       this.handleDanmakuEvents();

@@ -1,4 +1,3 @@
-import WebSocket from 'ws'
 import EventEmitter from 'events'
 import net from 'net'
 import _ from 'lodash'
@@ -30,6 +29,9 @@ export default class DanmakuService extends EventEmitter {
     this.useWSS = config.useWSS || false
     this.useGiftBundle = config.useGiftBundle || false
     this.giftBundleDelay = config.giftBundleDelay || 3e3
+    this.api = config.api
+
+    this.titleInfos = this.api.getTitleInfos()
 
     this._socket = null
     this._socketEvents = {
@@ -97,40 +99,43 @@ export default class DanmakuService extends EventEmitter {
       events = this._websocketEvents
     }
 
-    socket.on(events.connect, () => {
+    socket.onopen = () => {
       if (socket !== this._socket) return
-      this.sendJoinRoom()
-      this.emit('connect')
-    })
+      this.sendJoinRoom();
+      this.emit('connect');
+    };
 
-    socket.on(events.data, (msg) => {
+    socket.onmessage = (evt) => {
+      var msg = evt.data
       if (socket !== this._socket) return
-      this._checkErrorService()
-      DMDecoder.decodeData(msg).map(m => {
-        if (m.type === 'connected') {
-          this.sendHeartbeat()
-          this.emit(m.type, m)
-        } else {
-          if (m.type === 'gift' && this.useGiftBundle) {
-            this.bundleGift(m)
+      this._checkErrorService();
+      DMDecoder.decodeData(msg, (msgs) => {
+        msgs.map(m => {
+          if (m.type === 'connected') {
+            this.sendHeartbeat();
+            this.emit(m.type, m);
           } else {
-            this.emit('data', m)
-            this.emit(m.type, m)
+            if (m.type === 'gift' && this.useGiftBundle) {
+              this.bundleGift(m);
+            } else {
+              this.emit('data', m);
+              this.emit(m.type, m);
+            }
           }
-        }
+        });
       })
-    })
+    };
 
-    socket.on(events.close, () => {
+    socket.onclose = () => {
       if (socket !== this._socket) return
-      this.emit('close')
-    })
+      this.emit('close');
+    };
 
-    socket.on(events.error, (err) => {
+    socket.onerror = (err) => {
       if (socket !== this._socket) return
-      this.emit('error', err)
-      this.reconnect()
-    })
+      this.emit('error', err.data);
+      this.reconnect();
+    };
   }
 
   sendJoinRoom() {

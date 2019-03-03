@@ -1,38 +1,41 @@
 import Consts from './consts.js'
 import { StringDecoder } from 'string_decoder'
+import toBuffer from 'blob-to-buffer';
 
 const textDecoder = new StringDecoder('utf8')
 
-function decodeBuffer (buff) {
-  let data = {}
-  data.packetLen = buff.readInt32BE(Consts.WS_PACKAGE_OFFSET)
-  Consts.dataStruct.forEach((struct) => {
-    if (struct.bytes === 4) {
-      data[struct.key] = buff.readInt32BE(struct.offset)
-    } else if (struct.bytes === 2) {
-      data[struct.key] = buff.readInt16BE(struct.offset)
-    }
-  })
-  if (data.op && data.op === Consts.WS_OP_MESSAGE) {
-    data.body = []
-    let packetLen = data.packetLen
-    let headerLen = 0
-    for (let offset = Consts.WS_PACKAGE_OFFSET; offset < buff.byteLength; offset += packetLen) {
-      packetLen = buff.readInt32BE(offset)
-      headerLen = buff.readInt16BE(offset + Consts.WS_HEADER_OFFSET)
-      try {
-        let body = JSON.parse(textDecoder.write(buff.slice(offset + headerLen, offset + packetLen)))
-        data.body.push(body)
-      } catch (e) {
-        console.log('decode body error:', textDecoder.write(buff.slice(offset + headerLen, offset + packetLen)), data)
+function decodeBuffer (blob, cb) {
+  toBuffer(blob, function (err, buff) {
+    var data = {};
+    data.packetLen = buff.readInt32BE(Consts.WS_PACKAGE_OFFSET);
+    Consts.dataStruct.forEach((struct) => {
+      if (struct.bytes === 4) {
+        data[struct.key] = buff.readInt32BE(struct.offset);
+      } else if (struct.bytes === 2) {
+        data[struct.key] = buff.readInt16BE(struct.offset);
       }
+    });
+    if (data.op && data.op === Consts.WS_OP_MESSAGE) {
+      data.body = [];
+      let packetLen = data.packetLen;
+      let headerLen = 0;
+      for (let offset = Consts.WS_PACKAGE_OFFSET; offset < buff.byteLength; offset += packetLen) {
+        packetLen = buff.readInt32BE(offset);
+        headerLen = buff.readInt16BE(offset + Consts.WS_HEADER_OFFSET);
+        try {
+          let body = JSON.parse(textDecoder.write(buff.slice(offset + headerLen, offset + packetLen)));
+          data.body.push(body);
+        } catch (e) {
+          console.log('decode body error:', textDecoder.write(buff.slice(offset + headerLen, offset + packetLen)), data);
+        }
+      }
+    } else if (data.op && data.op === Consts.WS_OP_HEARTBEAT_REPLY) {
+      data.body = {
+        number: buff.readInt32BE(Consts.WS_PACKAGE_HEADER_TOTAL_LENGTH)
+      };
     }
-  } else if (data.op && data.op === Consts.WS_OP_HEARTBEAT_REPLY) {
-    data.body = {
-      number: buff.readInt32BE(Consts.WS_PACKAGE_HEADER_TOTAL_LENGTH)
-    }
-  }
-  return data
+    cb(data)
+  })
 }
 
 function parseMessage (msg) {
@@ -53,7 +56,7 @@ function parseMessage (msg) {
   }
 }
 
-function transformMessage (msg) {
+function transformMessage (msg, config) {
   let message = {}
   switch (msg.cmd) {
     case 'LIVE':
@@ -87,9 +90,16 @@ function transformMessage (msg) {
         message.user.level = msg.info[4][0]
       }
       if (msg.info[5].length) {
+        var info = config.find((i) => {
+          return i.id === msg.info[5][0]
+        })
+        var url = null
+        if (info)
+          url = info.url
         message.user.title = {
           name: msg.info[5][0],
-          source: msg.info[5][1]
+          source: msg.info[5][1],
+          url
         }
       }
       break
@@ -149,19 +159,26 @@ function transformMessage (msg) {
   return message
 }
 
-function decodeData (buff) {
-  let messages = []
+function decodeData (buff, config, cb) {
+  let messages = [];
   try {
-    let data = parseMessage(decodeBuffer(buff))
-    if (data instanceof Array) {
-      data.forEach((m) => {
-        messages.push(m)
-      })
-    } else if (data instanceof Object) {
-      messages.push(data)
-    }
+    decodeBuffer(buff, (decoded) => {
+      try {
+        let data = parseMessage(decoded, config);
+        if (data instanceof Array) {
+          data.forEach((m) => {
+            messages.push(m);
+          });
+        } else if (data instanceof Object) {
+          messages.push(data);
+        }
+        cb(messages)
+      } catch (e) {
+        console.log('Socket message error', buff, e);
+      }
+    })
   } catch (e) {
-    console.log('Socket message error', buff, e)
+    console.log('Socket message error', buff, e);
   }
   return messages
 }

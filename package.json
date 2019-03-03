@@ -9,7 +9,7 @@
     "build:cjs": "rollup ./src/index.js --output.format cjs --output.file ./dist/bilibili-live.js",
     "build:es": "rollup ./src/index.js --output.format es --output.file ./dist/bilibili-live.esm.js",
     "test:user": "node ./test/user.js",
-    "test:room": "node --inspect ./test/room.js",
+    "test:room": "node %NODE_DEBUG_OPTION% --inspect ./test/room.js",
     "test:api": "node ./test/api.js",
     "test:action": "node --inspect ./test/action.js"
   },
@@ -17,7 +17,7 @@
   "license": "MIT",
   "dependencies": {
     "lodash": "^4.17.4",
-    "ws": "^3.0.0"
+    "blob-to-buffer": "^1.2.8"
   },
   "devDependencies": {
     "rollup": "^0.48.2",
