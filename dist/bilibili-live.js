@@ -165,12 +165,15 @@ function transformMessage (msg, config) {
         message.user.level = msg.info[4][0];
       }
       if (msg.info[5].length) {
-        var info = config.find((i) => {
-          return i.id === msg.info[5][0]
-        });
         var url$$1 = null;
-        if (info)
-          url$$1 = info.url;
+        if (config.titles) {
+          var info = config.titles.find((i) => {
+            return i.id === msg.info[5][0]
+          });
+
+          if (info)
+            url$$1 = info.url;
+        }
         message.user.title = {
           name: msg.info[5][0],
           source: msg.info[5][1],
@@ -417,7 +420,7 @@ class DanmakuService extends EventEmitter {
       var msg = evt.data;
       if (socket !== this._socket) return
       this._checkErrorService();
-      DMDecoder.decodeData(msg, (msgs) => {
+      DMDecoder.decodeData(msg, {titles: this.titleInfos}, (msgs) => {
         msgs.map(m => {
           if (m.type === 'connected') {
             this.sendHeartbeat();
