@@ -90,12 +90,15 @@ function transformMessage (msg, config) {
         message.user.level = msg.info[4][0]
       }
       if (msg.info[5].length) {
-        var info = config.find((i) => {
-          return i.id === msg.info[5][0]
-        })
         var url = null
-        if (info)
-          url = info.url
+        if (config.titles) {
+          var info = config.titles.find((i) => {
+            return i.id === msg.info[5][0]
+          })
+
+          if (info)
+            url = info.url
+        }
         message.user.title = {
           name: msg.info[5][0],
           source: msg.info[5][1],

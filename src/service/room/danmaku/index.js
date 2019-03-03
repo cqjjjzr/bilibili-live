@@ -109,7 +109,7 @@ export default class DanmakuService extends EventEmitter {
       var msg = evt.data
       if (socket !== this._socket) return
       this._checkErrorService();
-      DMDecoder.decodeData(msg, (msgs) => {
+      DMDecoder.decodeData(msg, {titles: this.titleInfos}, (msgs) => {
         msgs.map(m => {
           if (m.type === 'connected') {
             this.sendHeartbeat();
