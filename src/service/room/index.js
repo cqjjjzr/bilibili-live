@@ -39,7 +39,8 @@ export default class RoomService extends EventEmitter {
 
       this._fansService = new FansService({
         userId: info.anchor.id,
-        useHttps: !!this.config.useHttps
+        useHttps: !!this.config.useHttps,
+        api: this._api
       })
 
       this.handleFansEvents()
