@@ -8,7 +8,7 @@ export default class InfoService extends EventEmitter {
 
     this.updateDelay = config.updateDelay || 5e3
 
-    this._api = new Api()
+    this._api = config.api ? config.api : new Api()
     this._service = null
     this._lastUpdate = new Date()
     this._info = {}

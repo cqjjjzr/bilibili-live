@@ -4,6 +4,7 @@ import _ from 'lodash'
 
 import DMDecoder from './decoder'
 import DMEncoder from './encoder'
+import Api from "../../../api/index.js";
 
 const DMPORT = 2243
 const DMSERVER = 'livecmt-2.bilibili.com'
@@ -29,7 +30,7 @@ export default class DanmakuService extends EventEmitter {
     this.useWSS = config.useWSS || false
     this.useGiftBundle = config.useGiftBundle || false
     this.giftBundleDelay = config.giftBundleDelay || 3e3
-    this.api = config.api
+    this.api = config.api ? config.api : new Api()
 
     this.api.getTitleInfos().then((iv) => {
       this.titleInfos = iv

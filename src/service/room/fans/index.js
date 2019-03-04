@@ -8,7 +8,7 @@ export default class FansService extends EventEmitter {
     this.userId = config.userId
     this.updateDelay = config.updateDelay || 5e3
 
-    this._api = config.api
+    this._api = config.api ? config.api : new Api()
     this._service = null
     this._lastUpdate = new Date()
     this._fansSet = new Set()

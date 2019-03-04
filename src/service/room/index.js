@@ -47,7 +47,8 @@ export default class RoomService extends EventEmitter {
 
       this._infoService = new InfoService({
         roomId: this.roomId,
-        useHttps: !!this.config.useHttps
+        useHttps: !!this.config.useHttps,
+        api: this._api
       })
 
       this.handleInfoEvents()
