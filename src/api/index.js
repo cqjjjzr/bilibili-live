@@ -4,7 +4,7 @@ import { get, post } from '../utils/request.js'
 import RoomApi from './room/index.js'
 import UserApi from './user/index.js'
 
-//const BASE_URL = 'api.live.bilibili.com/'
+const BASE_URL = 'api.live.bilibili.com/'
 
 class Api {
   constructor(config = {}) {
@@ -28,7 +28,7 @@ class Api {
   }
 
   get(options) {
-    let url = this.protocol + (options.url ? options.url : this.baseUrlLive + options.uri)
+    let url = this.protocol + (options.url ? options.url : (this.baseUrlLive ? this.baseUrlLive : BASE_URL) + options.uri)
     let headers = {
       'Cookie': this.cookie
     }
@@ -39,7 +39,7 @@ class Api {
   }
 
   post(options) {
-    let url = this.protocol + (options.url ? options.url : this.baseUrlLive + options.uri)
+    let url = this.protocol + (options.url ? options.url : (this.baseUrlLive ? this.baseUrlLive : BASE_URL) + options.uri)
     let headers = {
       'Cookie': this.cookie
     }

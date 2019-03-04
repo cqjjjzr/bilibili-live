@@ -92,7 +92,7 @@ export function getRoomMessage () {
 // 获取直播间粉丝列表
 export function getAnchorFollwerList (anchorId, page = 1, pageSize = 20, order = 'desc') {
   return this.get({
-    url: this.baseUrlBilibili + 'x/relation/followers',
+    url: (this.baseUrlBilibili ? this.baseUrlBilibili : "api.bilibili.com/") + 'x/relation/followers',
     params: {
       vmid: anchorId,
       pn: page,

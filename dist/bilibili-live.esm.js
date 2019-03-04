@@ -657,7 +657,7 @@ function getRoomMessage () {
 // 获取直播间粉丝列表
 function getAnchorFollwerList (anchorId, page = 1, pageSize = 20, order = 'desc') {
   return this.get({
-    url: this.baseUrlBilibili + 'x/relation/followers',
+    url: (this.baseUrlBilibili ? this.baseUrlBilibili : "api.bilibili.com/") + 'x/relation/followers',
     params: {
       vmid: anchorId,
       pn: page,
@@ -1093,7 +1093,7 @@ var activity = Object.freeze({
 
 let apis$1 = Object.assign({}, basic$1, audience, anchor, activity);
 
-//const BASE_URL = 'api.live.bilibili.com/'
+const BASE_URL = 'api.live.bilibili.com/';
 
 class Api {
   constructor(config = {}) {
@@ -1117,7 +1117,7 @@ class Api {
   }
 
   get(options) {
-    let url$$1 = this.protocol + (options.url ? options.url : this.baseUrlLive + options.uri);
+    let url$$1 = this.protocol + (options.url ? options.url : (this.baseUrlLive ? this.baseUrlLive : BASE_URL) + options.uri);
     let headers = {
       'Cookie': this.cookie
     };
@@ -1128,7 +1128,7 @@ class Api {
   }
 
   post(options) {
-    let url$$1 = this.protocol + (options.url ? options.url : this.baseUrlLive + options.uri);
+    let url$$1 = this.protocol + (options.url ? options.url : (this.baseUrlLive ? this.baseUrlLive : BASE_URL) + options.uri);
     let headers = {
       'Cookie': this.cookie
     };
