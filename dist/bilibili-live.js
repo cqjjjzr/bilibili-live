@@ -342,7 +342,9 @@ class DanmakuService extends EventEmitter {
     this.giftBundleDelay = config.giftBundleDelay || 3e3;
     this.api = config.api;
 
-    this.titleInfos = this.api.getTitleInfos();
+    this.api.getTitleInfos().then((iv) => {
+      this.titleInfos = iv;
+    });
 
     this._socket = null;
     this._socketEvents = {
