@@ -113,7 +113,7 @@ function decodeBuffer (blob, cb) {
   });
 }
 
-function parseMessage (msg) {
+function parseMessage (msg, config) {
   switch (msg.op) {
     case Consts.WS_OP_HEARTBEAT_REPLY:
       msg.body.type = 'online';
@@ -121,7 +121,7 @@ function parseMessage (msg) {
       return msg.body
     case Consts.WS_OP_MESSAGE:
       return msg.body.map((m) => {
-        return transformMessage(m)
+        return transformMessage(m, config)
       })
     case Consts.WS_OP_CONNECT_SUCCESS:
       return {
